@@ -12,16 +12,18 @@ elements = []
 class HttpWorker(object):
     def do_work(self):
         page_request = 'Search.aspx?jqGridID=BaseMainContent_MainContent_jqgTrade&rows=10&sidx=PublicationDate&sord=desc&page='
-        response = self.get_json(BASE_URL + page_request + "1")
-        total, num_last_elements = self.get_page_info(response)
+        json = self.get_json(BASE_URL + page_request + "1")
+        total, num_last_elements = self.get_page_info(json)
         page = 1
-        element = 10
+        num_element = 10
         while page <= total:
             if page == total:
-                element = int(num_last_elements)
+                num_element = int(num_last_elements)
             if page != 1:
-                response = self.get_json(BASE_URL + page_request + str(page))
-            self.parse_json(response, element)
+                json = self.get_json(BASE_URL + page_request + str(page))
+            list_page_id = self.parse_json_pages(json, num_element)
+            for page_id in list_page_id:
+                self.parse_html(self.get_html(BASE_URL + 'View.aspx?Id=' + page_id), page_id)
             page += 1
 
     def get_json(self, url):
@@ -34,56 +36,89 @@ class HttpWorker(object):
         records = str(parsed_string["records"])
         return total, records[-1]
 
-    def parse_json(self, json_bytes, element):
+    def parse_json_pages(self, json_bytes, num_element):
         parsed_string = json.loads(str(json_bytes, 'utf-8'))
         i = 0
-        while i < element:
+        list_page_id = []
+        while i < num_element:
             page_id = parsed_string["rows"][i]['cell'][1]
             i += 1
-            if page_id in elements:
-                continue
-            elements.append(page_id)
-            print(page_id)
-            self.get_html(page_id)
-            self.parse_html(self.get_html(page_id))
+            list_page_id.append(page_id)
+        return list_page_id
 
-    def get_html(self, page_id):
-        id_request = 'View.aspx?Id='
-        response = requests.post(BASE_URL + id_request + page_id)
+    def get_html(self, url):
+        response = requests.post(url)
         return response.text
 
-    def parse_html(self, html):
+    def parse_html(self, html, page_id):
         soup = BeautifulSoup(html, "lxml")
-        tender = soup.find_all('fieldset', class_="openPart")
-        my_dict = {}
+        my_dict = self.parse_common(soup)
+        my_dict["Номер"] = page_id
+        my_dict["Заказчик"] = self.parse_customer(soup)
+        my_dict["Документы"] = self.parse_attachments(soup, page_id)
+        my_dict['Лоты'] = self.parse_lots(soup)
+        print(my_dict)
+        return my_dict
+
+    def parse_common(self, soup):
+        tender = soup.find('div', class_='top-section form_block form_inline').find_all('fieldset', class_="openPart")
+        common = {}
         for i in tender:
             label = i.select('label')[0].get_text().strip()
             span = i.select('span')[0].get_text().strip()
-            if label in my_dict:
-                label = self.set_new_label(label, my_dict)
-            my_dict[re.sub(r'\s+', ' ', label)] = re.sub(r'\s+', ' ', span)
-        my_dict["Заказчик"] = self.parse_customer(soup)
-        # print(my_dict)
-        return my_dict
-
-    def set_new_label(self, label, my_dict):
-        index = 2
-        while 1:
-            if label + str(index) in my_dict:
-                index += 1
-            else:
-                label += str(index)
-                my_dict["Количество лотов"] = index
-                return label
+            common[re.sub(r'\s+', ' ', label)] = re.sub(r'\s+', ' ', span)
+        return common
 
     def parse_customer(self, soup):
-        tender = soup.find('div', class_="js-customerInfo").find_all('fieldset', class_="")
+        tender = soup.find('div', class_="js-customerInfo").find('fieldset', class_="")
+        url = tender.select('a')[0].attrs["href"]
+        html = self.get_html(url)
+        soup = BeautifulSoup(html, "lxml")
+        tender = soup.find('div', id="BaseMainContent_MainContent_divOrganisationInfo").find_all('fieldset')
         customer = {}
         for i in tender:
             label = i.select('label')[0].get_text().strip()
-            span = i.select('span')[1].get_text().strip()
+            span = i.select('span')[0].get_text().strip()
             customer[re.sub(r'\s+', ' ', label)] = re.sub(r'\s+', ' ', span)
         return customer
+
+    def parse_attachments(self, soup, page_id):
+        attachments = {}
+        str_href = "https://223.rts-tender.ru/files/FileDownloadHandler.ashx?FileGuid="
+        json_bytes = self.get_json(BASE_URL + '/View.aspx?Id=' + page_id + '&jqGridID=BaseMainContent_MainContent_jqgTradeDocs&rows=100&page=1')
+        parsed_string = json.loads(str(json_bytes, 'utf-8'))
+        page = 1
+        index = 1
+        while 1:
+            for row in parsed_string['rows']:
+                attachments[index] = {'href' : str_href + row['id'], 'name' : row['cell'][1]}
+                index += 1
+            if page < parsed_string['total']:
+                page += 1
+                json_bytes = self.get_json(BASE_URL + '/View.aspx?Id=' + page_id + '&jqGridID=BaseMainContent_MainContent_jqgTradeDocs&rows=100&page=' + page)
+                parsed_string = json.loads(str(json_bytes, 'utf-8'))
+            else:
+                break
+        return attachments
+
+    def parse_lots(self, soup):
+        tender = soup.find('div', id="tradeLotsList").find_all('div', class_='tradeLotInfo labelminwidth')
+        lots = {}
+        index = 1
+        lots['Количество лотов'] = len(tender)
+        for lot in tender:
+            fieldsets = lot.find_all('fieldset', class_="openPart")
+            one ={}
+            for fieldset in fieldsets:
+                label = fieldset.select('label')[0].get_text().strip()
+                span = fieldset.select('span')[0].get_text().strip()
+                one[self.remove_meny_spaces(label)] = self.remove_meny_spaces(span)
+            lots[index] = one
+            index +=1
+        return lots
+
+    def remove_meny_spaces(self, text):
+        return re.sub(r'\s+', ' ', text)
 
 if __name__ == '__main__':
     http_worker = HttpWorker()
