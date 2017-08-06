@@ -12,7 +12,7 @@ class HttpWorker(object):
     def parse_tender(self):
         response_json = self.get_json(self.url_search.format(1))
         page_count = self.get_page_info(response_json)
-        page = 2
+        page = 1
         while page <= page_count:
             try:
                 if page != 1:
