@@ -14,7 +14,7 @@ class HttpWorker(object):
         page_request = 'Search.aspx?jqGridID=BaseMainContent_MainContent_jqgTrade&rows=10&sidx=PublicationDate&sord=desc&page='
         json = self.get_json(BASE_URL + page_request + "1")
         total, num_last_elements = self.get_page_info(json)
-        page = 1
+        page = 3
         num_element = 10
         while page <= total:
             if page == total:
@@ -66,7 +66,7 @@ class HttpWorker(object):
         for i in tender:
             label = i.select('label')[0].get_text().strip()
             span = i.select('span')[0].get_text().strip()
-            common[re.sub(r'\s+', ' ', label)] = re.sub(r'\s+', ' ', span)
+            common[self.remove_meny_spaces(label)] = self.remove_meny_spaces(span)
         return common
 
     def parse_customer(self, soup):
@@ -79,7 +79,7 @@ class HttpWorker(object):
         for i in tender:
             label = i.select('label')[0].get_text().strip()
             span = i.select('span')[0].get_text().strip()
-            customer[re.sub(r'\s+', ' ', label)] = re.sub(r'\s+', ' ', span)
+            customer[self.remove_meny_spaces(label)] = self.remove_meny_spaces(span)
         return customer
 
     def parse_attachments(self, soup, page_id):
@@ -87,6 +87,8 @@ class HttpWorker(object):
         str_href = "https://223.rts-tender.ru/files/FileDownloadHandler.ashx?FileGuid="
         json_bytes = self.get_json(BASE_URL + '/View.aspx?Id=' + page_id + '&jqGridID=BaseMainContent_MainContent_jqgTradeDocs&rows=100&page=1')
         parsed_string = json.loads(str(json_bytes, 'utf-8'))
+        if parsed_string == []:
+            return parsed_string
         page = 1
         index = 1
         while 1:
