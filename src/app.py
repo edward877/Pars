@@ -4,11 +4,19 @@ from configparser import ConfigParser
 
 class Main(object):
     def __init__(self):
+<<<<<<< HEAD
         # self.config = self.get_config('./config.ini')
         #
         # print(self.config['Default']['base_url'])
 
         self.http_worker = HttpWorker()
+=======
+        self.config = self.get_config('./config.ini')
+
+        print(self.config['Default']['base_url'])
+
+        self.http_worker = HttpWorker(self.config)
+>>>>>>> 2b51de88fe8a4a5426a70b46373ebd0d0631b0a1
 
     def start(self):
         self.http_worker.parse_tender()
