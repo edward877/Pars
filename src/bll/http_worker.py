@@ -1,5 +1,5 @@
 import urllib.request, requests, json, re, time, configparser
-
+from src.db.db import DB
 from bs4 import BeautifulSoup
 
 
@@ -8,8 +8,10 @@ class HttpWorker(object):
         self.base_url = 'https://223.rts-tender.ru/supplier/auction/Trade/'
         self.url_search = self.base_url + 'Search.aspx?jqGridID=BaseMainContent_MainContent_jqgTrade&rows=10&sidx=PublicationDate&sord=desc&page={}'
         self.url_view = self.base_url + 'View.aspx?Id={}'
+        self.db = DB()
 
     def parse_tender(self):
+        collect = self.db.connect()
         response_json = self.get_json(self.url_search.format(1))
         page_count = self.get_page_info(response_json)
         page = 1
@@ -20,9 +22,16 @@ class HttpWorker(object):
                 list_tender_id = self.parse_json_pages(response_json)
                 for tender_id in list_tender_id:
                     html = self.get_html(self.url_view.format(tender_id))
-                    tenders = self.parse_html(html, tender_id)
-                    for tender in tenders:
-                        print(tender)
+                    soup = BeautifulSoup(html, "lxml")
+                    tender_temp = self.start_parse(soup, tender_id)
+                    exist = self.db.exist_in_db(collect, tender_temp)
+                    if not exist:
+                        tenders = self.parse_html(soup, tender_temp, tender_id)
+                        for tender in tenders:
+                            self.db.save_to_db(collect, tender)
+                            print(tender)
+                    else:
+                        print("уже есть")
                 page += 1
                 if page == page_count:
                     page=1
@@ -60,10 +69,12 @@ class HttpWorker(object):
         response = requests.post(url)
         return response.text
 
-    def parse_html(self, html, page_id) -> dict:
-        soup = BeautifulSoup(html, "lxml")
+    def start_parse(self, soup, page_id):
         my_dict = self.parse_common(soup)
         my_dict["Номер"] = page_id
+        return my_dict
+
+    def parse_html(self, soup, my_dict, page_id) -> dict:
         my_dict["Документы"] = self.parse_attachments(page_id)
         my_dict["Сведения о контактном лице"] = self.parse_contacts(soup)
         for lot in self.parse_lots(soup).values():
@@ -114,6 +125,7 @@ class HttpWorker(object):
         for lot in list_lots:
             fieldsets = lot.find_all('fieldset', class_="openPart")
             one ={}
+            one['Номер лота'] = index
             one['Заказчик']  = self.parse_customer(lot)
             one['Документы'] = self.parse_attachments_lot(lot)
             for fieldset in fieldsets:

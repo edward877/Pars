@@ -1,5 +1,4 @@
 from src.bll.http_worker import HttpWorker
-import configparser
 from configparser import ConfigParser
 
 class Main(object):
