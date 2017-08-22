@@ -23,15 +23,14 @@ class HttpWorker(object):
                 for tender_id in list_tender_id:
                     html = self.get_html(self.url_view.format(tender_id))
                     soup = BeautifulSoup(html, "lxml")
-                    tender_temp = self.start_parse(soup, tender_id)
-                    exist = self.db.exist_in_db(collect, tender_temp)
-                    if not exist:
-                        tenders = self.parse_html(soup, tender_temp, tender_id)
-                        for tender in tenders:
+                    tenders = self.parse_html(soup, tender_id)
+                    for tender in tenders:
+                        exist = self.db.exist_in_db(collect, tender)
+                        if not exist:
                             self.db.save_to_db(collect, tender)
                             print(tender)
-                    else:
-                        print("уже есть")
+                        else:
+                            print("уже есть")
                 page += 1
                 if page == page_count:
                     page=1
@@ -69,12 +68,9 @@ class HttpWorker(object):
         response = requests.post(url)
         return response.text
 
-    def start_parse(self, soup, page_id):
+    def parse_html(self, soup, page_id) -> dict:
         my_dict = self.parse_common(soup)
         my_dict["Номер"] = page_id
-        return my_dict
-
-    def parse_html(self, soup, my_dict, page_id) -> dict:
         my_dict["Документы"] = self.parse_attachments(page_id)
         my_dict["Сведения о контактном лице"] = self.parse_contacts(soup)
         for lot in self.parse_lots(soup).values():
