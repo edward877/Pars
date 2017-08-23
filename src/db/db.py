@@ -9,15 +9,15 @@ class DB(object):
     def connect(self):
         connection = MongoClient('localhost', 27017)
         db = connection.test
-        collect = db.test1
+        collect = db.test2
         return collect
 
     def save_to_db(self, collect, tender):
-        doc = {"_id": tender['Номер'] + "_" + str(tender['Лот']['Номер лота']),
+        doc = {"_id": tender['Номер'] + " " + str(tender['Лот']['Номер лота']),
                "number_redaction": tender['Номер редакции извещения']}
         collect.save(doc)
 
     def exist_in_db(self, collect, tender):
-        test = collect.find_one({"_id": tender['Номер'] + "_" + str(tender['Лот']['Номер лота'])},
+        test = collect.find_one({"_id": tender['Номер'] + " " + str(tender['Лот']['Номер лота'])},
                                 {'number_redaction': tender['Номер редакции извещения']})
         return test

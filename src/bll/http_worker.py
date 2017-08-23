@@ -1,5 +1,6 @@
 import urllib.request, requests, json, re, time, configparser
 from src.db.db import DB
+from src.bll.mapper import Map
 from bs4 import BeautifulSoup
 
 
@@ -9,6 +10,7 @@ class HttpWorker(object):
         self.url_search = self.base_url + 'Search.aspx?jqGridID=BaseMainContent_MainContent_jqgTrade&rows=10&sidx=PublicationDate&sord=desc&page={}'
         self.url_view = self.base_url + 'View.aspx?Id={}'
         self.db = DB()
+        self.map = Map()
 
     def parse_tender(self):
         collect = self.db.connect()
@@ -28,7 +30,7 @@ class HttpWorker(object):
                         exist = self.db.exist_in_db(collect, tender)
                         if not exist:
                             self.db.save_to_db(collect, tender)
-                            print(tender)
+                            print(self.map.create_model(tender))
                         else:
                             print("уже есть")
                 page += 1
@@ -93,7 +95,6 @@ class HttpWorker(object):
             contact[key] = value
         return contact
 
-
     def parse_attachments(self, page_id):
         attachments = {}
         str_href = "https://223.rts-tender.ru/files/FileDownloadHandler.ashx?FileGuid="
@@ -122,6 +123,7 @@ class HttpWorker(object):
             fieldsets = lot.find_all('fieldset', class_="openPart")
             one ={}
             one['Номер лота'] = index
+            one['Количество лотов'] = len(list_lots)
             one['Заказчик']  = self.parse_customer(lot)
             one['Документы'] = self.parse_attachments_lot(lot)
             for fieldset in fieldsets:
