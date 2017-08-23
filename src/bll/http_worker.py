@@ -1,5 +1,5 @@
-import urllib.request, requests, json, re, time, configparser
-from src.db.db import DB
+import urllib.request, requests, json, re, time
+from src.repository.mongo import MongoRepository
 from src.bll.mapper import Map
 from bs4 import BeautifulSoup
 
@@ -9,36 +9,35 @@ class HttpWorker(object):
         self.base_url = 'https://223.rts-tender.ru/supplier/auction/Trade/'
         self.url_search = self.base_url + 'Search.aspx?jqGridID=BaseMainContent_MainContent_jqgTrade&rows=10&sidx=PublicationDate&sord=desc&page={}'
         self.url_view = self.base_url + 'View.aspx?Id={}'
-        self.db = DB()
         self.map = Map()
 
-    def parse_tender(self):
-        collect = self.db.connect()
-        response_json = self.get_json(self.url_search.format(1))
-        page_count = self.get_page_info(response_json)
-        page = 1
-        while page <= page_count:
-            try:
-                if page != 1:
-                    response_json = self.get_json(self.url_search.format(page))
-                list_tender_id = self.parse_json_pages(response_json)
-                for tender_id in list_tender_id:
-                    html = self.get_html(self.url_view.format(tender_id))
-                    soup = BeautifulSoup(html, "lxml")
-                    tenders = self.parse_html(soup, tender_id)
-                    for tender in tenders:
-                        exist = self.db.exist_in_db(collect, tender)
-                        if not exist:
-                            self.db.save_to_db(collect, tender)
-                            print(self.map.create_model(tender))
-                        else:
-                            print("уже есть")
-                page += 1
-                if page == page_count:
-                    page=1
-                    page_count = self.get_page_info(response_json)
-            except Exception as ex:
-                print(ex)
+    # def parse_tender(self):
+    #     collect = self.db.connect()
+    #     response_json = self.get_json(self.url_search.format(1))
+    #     page_count = self.get_page_info(response_json)
+    #     page = 1
+    #     while page <= page_count:
+    #         try:
+    #             if page != 1:
+    #                 response_json = self.get_json(self.url_search.format(page))
+    #             list_tender_id = self.parse_json_pages(response_json)
+    #             for tender_id in list_tender_id:
+    #                 html = self.get_html(self.url_view.format(tender_id))
+    #                 soup = BeautifulSoup(html, "lxml")
+    #                 tenders = self.parse_html(soup, tender_id)
+    #                 for tender in tenders:
+    #                     exist = self.db.exist_in_db(collect, tender)
+    #                     if not exist:
+    #                         self.db.save_to_db(collect, tender)
+    #                         print(self.map.create_model(tender))
+    #                     else:
+    #                         print("уже есть")
+    #             page += 1
+    #             if page == page_count:
+    #                 page=1
+    #                 page_count = self.get_page_info(response_json)
+    #         except Exception as ex:
+    #             print(ex)
 
     def get_json(self, url) -> dict:
         response = urllib.request.urlopen(url)
@@ -70,7 +69,8 @@ class HttpWorker(object):
         response = requests.post(url)
         return response.text
 
-    def parse_html(self, soup, page_id) -> dict:
+    def parse_html(self, html, page_id) -> dict:
+        soup = BeautifulSoup(html, "lxml")
         my_dict = self.parse_common(soup)
         my_dict["Номер"] = page_id
         my_dict["Документы"] = self.parse_attachments(page_id)
@@ -172,7 +172,3 @@ class HttpWorker(object):
         value = node.select('span')[0].get_text().strip()
         value = re.sub(r'\s+', ' ', value)
         return key, value
-
-if __name__ == '__main__':
-    http_worker = HttpWorker()
-    http_worker.parse_tender()

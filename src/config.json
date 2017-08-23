@@ -1,0 +1,14 @@
+{
+  "mongodb": {
+    "connectionString": "mongodb://localhost:27017",
+    "database": "rts-tenders",
+    "collection": "tenders"
+  },
+  "rabbitmq": {
+    "user": "guest",
+    "password": "guest",
+    "host": "localhost",
+    "port": 5762,
+    "queue": "rst-tenders"
+  }
+}
